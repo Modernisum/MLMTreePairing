@@ -5,7 +5,7 @@ import 'dart:ui' as ui;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:pdf/pdf.dart';
+
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -46,7 +46,7 @@ class MyApp extends StatelessWidget {
                           content: TextField(
                             controller: controller,
                             decoration: const InputDecoration(
-                                labelText: "Enter ID (e.g. m12345678)"),
+                                labelText: "Enter ID (e.g. M12345678)"),
                           ),
                           actions: [
                             TextButton(
@@ -84,19 +84,27 @@ class MyApp extends StatelessWidget {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      Text("ID: \${foundNode.id}"),
-                                      Text("Name: \${foundNode.name}"),
+                                      Text("ID:  ${foundNode.id}"),
+                                      Text("Name:  ${foundNode.name}"),
                                       if (foundNode.email != null)
-                                        Text("Email: \${foundNode.email}"),
+                                        Text("Email: ${foundNode.email}"),
                                       if (foundNode.phone != null)
-                                        Text("Phone: \${foundNode.phone}"),
+                                        Text("Phone: ${foundNode.phone}"),
                                     ],
                                   ),
                                   actions: [
                                     TextButton(
                                       onPressed: () => Navigator.pop(context),
                                       child: const Text("Close"),
-                                    )
+                                    ),
+                                    TextButton(
+                                      onPressed: () {
+                                        Navigator.pop(context);
+                                        _confirmDelete(context, foundNode.id);
+                                      },
+                                      child: const Text("Delete Node",
+                                          style: TextStyle(color: Colors.red)),
+                                    ),
                                   ],
                                 ),
                               );
@@ -138,8 +146,8 @@ class MyApp extends StatelessWidget {
                         ),
                       );
 
-                      await Printing.layoutPdf(
-                          onLayout: (PdfPageFormat format) async => pdf.save());
+                      await Printing.sharePdf(
+                          bytes: await pdf.save(), filename: 'mlm_tree.pdf');
                     }
                   },
                 )
@@ -162,6 +170,45 @@ class MyApp extends StatelessWidget {
     if (found != null) return found;
     if (node.right != null) found = _findNodeById(node.right!, id);
     return found;
+  }
+
+  void _confirmDelete(BuildContext context, String idToDelete) async {
+    final doc = await FirebaseFirestore.instance
+        .collection("mlm_tree")
+        .doc("root")
+        .get();
+    if (!doc.exists) return;
+
+    final data = doc.data();
+    if (data == null) return;
+
+    final rootNode = UserNode.fromJson(data);
+    final updated = _deleteNode(rootNode, idToDelete);
+
+    if (updated != null) {
+      await FirebaseFirestore.instance
+          .collection("mlm_tree")
+          .doc("root")
+          .set(updated.toJson());
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Node deleted successfully.")),
+      );
+    }
+  }
+
+  UserNode? _deleteNode(UserNode? node, String idToDelete) {
+    if (node == null) return null;
+    if (node.left?.id == idToDelete) {
+      node.left = null;
+      return node;
+    }
+    if (node.right?.id == idToDelete) {
+      node.right = null;
+      return node;
+    }
+    _deleteNode(node.left, idToDelete);
+    _deleteNode(node.right, idToDelete);
+    return node;
   }
 
   void _showNotFound(BuildContext context) {
@@ -229,7 +276,7 @@ class UserNode {
 String generateMLMUserId() {
   final random = Random();
   final number = 10000000 + random.nextInt(90000000);
-  return 'm$number';
+  return 'M$number';
 }
 
 class TreeViewer extends StatefulWidget {
@@ -242,7 +289,6 @@ class TreeViewer extends StatefulWidget {
 class _TreeViewerState extends State<TreeViewer> {
   late UserNode root;
   bool _isLoading = true;
-  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -280,46 +326,6 @@ class _TreeViewerState extends State<TreeViewer> {
     }
   }
 
-  void _searchAndScroll(String id) {
-    final match = _findNodeAndExpand(root, id);
-    if (match != null) {
-      setState(() {});
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final context = match.key.currentContext;
-        if (context != null) {
-          Scrollable.ensureVisible(
-            context,
-            duration: const Duration(seconds: 1),
-            alignment: 0.5,
-          );
-        }
-      });
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("User ID not found")),
-      );
-    }
-  }
-
-  UserNode? _findNodeAndExpand(UserNode? node, String id) {
-    if (node == null) return null;
-    if (node.id == id) return node;
-
-    final left = _findNodeAndExpand(node.left, id);
-    if (left != null) {
-      node.isExpanded = true;
-      return left;
-    }
-
-    final right = _findNodeAndExpand(node.right, id);
-    if (right != null) {
-      node.isExpanded = true;
-      return right;
-    }
-
-    return null;
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -328,32 +334,6 @@ class _TreeViewerState extends State<TreeViewer> {
 
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _searchController,
-                  decoration: const InputDecoration(
-                    hintText: 'Search ID (e.g., m12345678)',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: () => _searchAndScroll(_searchController.text),
-                child: const Text("Search"),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: _saveTree,
-                child: const Text("Save Tree"),
-              )
-            ],
-          ),
-        ),
         Expanded(
           child: InteractiveViewer(
             constrained: false,
@@ -377,6 +357,7 @@ class _TreeViewerState extends State<TreeViewer> {
   }
 }
 
+//
 class BinaryTreeWidget extends StatefulWidget {
   final UserNode node;
   final VoidCallback onTreeChanged;
