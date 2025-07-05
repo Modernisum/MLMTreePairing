@@ -1,6 +1,5 @@
-import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
+
 import 'dart:ui' as ui;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -399,44 +398,31 @@ class _BinaryTreeWidgetState extends State<BinaryTreeWidget> {
       key: node.key,
       mainAxisSize: MainAxisSize.min,
       children: [
-        GestureDetector(
+        SizedBox(
+          height: 60,
+        ),
+        InkWell(
           onTap: () => _showEditDialog(node),
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            margin: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.lightBlue.shade50,
-              border: Border.all(color: Colors.blue),
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: const [
-                BoxShadow(color: Colors.black12, blurRadius: 4)
-              ],
-            ),
-            child: Column(
-              children: [
-                Text(node.name,
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text("ID: ${node.id}",
-                    style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                if (node.email != null)
-                  Text(node.email!, style: const TextStyle(fontSize: 12)),
-                if (node.phone != null)
-                  Text(node.phone!, style: const TextStyle(fontSize: 12)),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (node.left == null || node.right == null)
-                      IconButton(
-                        icon: const Icon(Icons.person_add),
-                        tooltip: "Add Customer",
-                        onPressed: () => _addChildAuto(node),
-                      ),
-                  ],
-                ),
-              ],
-            ),
+          borderRadius: BorderRadius.circular(12),
+          child: CircleAvatar(
+            radius: 22,
+            backgroundColor: const ui.Color.fromARGB(255, 210, 71, 71),
+            child: Icon(Icons.person, size: 30),
           ),
         ),
+        if (node.left == null || node.right == null)
+          IconButton(
+            icon: const Icon(Icons.person_add),
+            tooltip: "Add Customer",
+            onPressed: () => _addChildAuto(node),
+          ),
+        Text(node.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+        Text("ID: ${node.id}",
+            style: const TextStyle(fontSize: 10, color: Colors.grey)),
+        if (node.email != null)
+          Text(node.email!, style: const TextStyle(fontSize: 12)),
+        if (node.phone != null)
+          Text(node.phone!, style: const TextStyle(fontSize: 12)),
         if (node.isExpanded && (node.left != null || node.right != null))
           Column(
             children: [
@@ -461,24 +447,6 @@ class _BinaryTreeWidgetState extends State<BinaryTreeWidget> {
           ),
       ],
     );
-  }
-
-  void _addChild(UserNode parent, {required bool isLeft}) {
-    final newNode = UserNode(
-      id: generateMLMUserId(),
-      name: "New Customer",
-    );
-
-    setState(() {
-      if (isLeft) {
-        parent.left = newNode;
-      } else {
-        parent.right = newNode;
-      }
-      parent.isExpanded = true;
-    });
-
-    widget.onTreeChanged();
   }
 
   void _showEditDialog(UserNode node) {
