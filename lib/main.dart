@@ -374,6 +374,24 @@ class _BinaryTreeWidgetState extends State<BinaryTreeWidget> {
     return _buildNode(widget.node);
   }
 
+  void _addChildAuto(UserNode parent) {
+    final newNode = UserNode(
+      id: generateMLMUserId(),
+      name: "New Customer",
+    );
+
+    setState(() {
+      if (parent.left == null) {
+        parent.left = newNode;
+      } else {
+        parent.right ??= newNode;
+      }
+      parent.isExpanded = true;
+    });
+
+    widget.onTreeChanged();
+  }
+
   Widget _buildNode(UserNode? node) {
     if (node == null) return const SizedBox();
 
@@ -407,17 +425,11 @@ class _BinaryTreeWidgetState extends State<BinaryTreeWidget> {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (node.left == null)
-                      IconButton(
-                        icon: const Icon(Icons.person_add_alt_1),
-                        tooltip: "Add Left",
-                        onPressed: () => _addChild(node, isLeft: true),
-                      ),
-                    if (node.right == null)
+                    if (node.left == null || node.right == null)
                       IconButton(
                         icon: const Icon(Icons.person_add),
-                        tooltip: "Add Right",
-                        onPressed: () => _addChild(node, isLeft: false),
+                        tooltip: "Add Customer",
+                        onPressed: () => _addChildAuto(node),
                       ),
                   ],
                 ),
@@ -524,18 +536,23 @@ class LinePainter extends CustomPainter {
       ..color = Colors.grey
       ..strokeWidth = 2;
 
-    final centerTop = Offset(size.width / 2, 0);
-    final verticalMid = Offset(size.width / 2, 40);
+    // Reduce vertical space
+    final verticalSpace = 0.0; // was 40
+    final downLine = 10.0; // was 20
 
-    final leftPoint = Offset(size.width / 4, 40);
-    final rightPoint = Offset(size.width * 3 / 4, 40);
+    final centerTop = Offset(size.width / 2, 0);
+    final verticalMid = Offset(size.width / 2, verticalSpace);
+
+    final leftPoint = Offset(size.width / 4, verticalSpace);
+    final rightPoint = Offset(size.width * 3 / 4, verticalSpace);
 
     canvas.drawLine(centerTop, verticalMid, paint);
     canvas.drawLine(verticalMid, leftPoint, paint);
     canvas.drawLine(verticalMid, rightPoint, paint);
-    canvas.drawLine(leftPoint, Offset(leftPoint.dx, leftPoint.dy + 20), paint);
     canvas.drawLine(
-        rightPoint, Offset(rightPoint.dx, rightPoint.dy + 20), paint);
+        leftPoint, Offset(leftPoint.dx, leftPoint.dy + downLine), paint);
+    canvas.drawLine(
+        rightPoint, Offset(rightPoint.dx, rightPoint.dy + downLine), paint);
   }
 
   @override
