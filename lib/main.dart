@@ -1,9 +1,17 @@
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+
+final GlobalKey globalTreeKey = GlobalKey();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,9 +28,154 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Binary MLM Tree',
       debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        appBar: AppBar(title: const Text("Binary MLM Tree")),
-        body: const TreeViewer(),
+      home: LayoutBuilder(
+        builder: (context, constraints) {
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text("Binary MLM Tree"),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.search),
+                  onPressed: () async {
+                    final id = await showDialog<String>(
+                      context: context,
+                      builder: (context) {
+                        final controller = TextEditingController();
+                        return AlertDialog(
+                          title: const Text("Search by ID"),
+                          content: TextField(
+                            controller: controller,
+                            decoration: const InputDecoration(
+                                labelText: "Enter ID (e.g. m12345678)"),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text("Cancel"),
+                            ),
+                            ElevatedButton(
+                              onPressed: () =>
+                                  Navigator.pop(context, controller.text),
+                              child: const Text("Search"),
+                            )
+                          ],
+                        );
+                      },
+                    );
+
+                    if (id != null && id.isNotEmpty) {
+                      try {
+                        final doc = await FirebaseFirestore.instance
+                            .collection("mlm_tree")
+                            .doc("root")
+                            .get();
+                        if (doc.exists) {
+                          final data = doc.data();
+                          if (data != null) {
+                            final UserNode rootNode = UserNode.fromJson(data);
+                            final foundNode = _findNodeById(rootNode, id);
+                            if (foundNode != null) {
+                              showDialog(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text("User Found"),
+                                  content: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text("ID: \${foundNode.id}"),
+                                      Text("Name: \${foundNode.name}"),
+                                      if (foundNode.email != null)
+                                        Text("Email: \${foundNode.email}"),
+                                      if (foundNode.phone != null)
+                                        Text("Phone: \${foundNode.phone}"),
+                                    ],
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      child: const Text("Close"),
+                                    )
+                                  ],
+                                ),
+                              );
+                            } else {
+                              _showNotFound(context);
+                            }
+                          } else {
+                            _showNotFound(context);
+                          }
+                        } else {
+                          _showNotFound(context);
+                        }
+                      } catch (e) {
+                        debugPrint("Firebase exception: \$e");
+                        _showNotFound(context);
+                      }
+                    }
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.picture_as_pdf),
+                  onPressed: () async {
+                    final boundary = globalTreeKey.currentContext
+                        ?.findRenderObject() as RenderRepaintBoundary?;
+                    if (boundary != null) {
+                      final image = await boundary.toImage(pixelRatio: 3.0);
+                      final byteData = await image.toByteData(
+                          format: ui.ImageByteFormat.png);
+                      final pngBytes = byteData!.buffer.asUint8List();
+
+                      final pdf = pw.Document();
+                      final imageProvider = pw.MemoryImage(pngBytes);
+
+                      pdf.addPage(
+                        pw.Page(
+                          build: (pw.Context context) {
+                            return pw.Center(child: pw.Image(imageProvider));
+                          },
+                        ),
+                      );
+
+                      await Printing.layoutPdf(
+                          onLayout: (PdfPageFormat format) async => pdf.save());
+                    }
+                  },
+                )
+              ],
+            ),
+            body: SizedBox(
+              height: constraints.maxHeight,
+              child: TreeViewer(),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  UserNode? _findNodeById(UserNode node, String id) {
+    if (node.id == id) return node;
+    UserNode? found;
+    if (node.left != null) found = _findNodeById(node.left!, id);
+    if (found != null) return found;
+    if (node.right != null) found = _findNodeById(node.right!, id);
+    return found;
+  }
+
+  void _showNotFound(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("User Not Found"),
+        content: const Text("No user found with the provided ID."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("OK"),
+          )
+        ],
       ),
     );
   }
